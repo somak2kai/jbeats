@@ -116,6 +116,33 @@ jobs:
             jbeats-windows-amd64.exe \
             checksums.txt
 
+      - name: Update Homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION=${{ github.ref_name }}
+          VERSION_NUM=${VERSION#v}
+
+          SHA_DARWIN_ARM64=$(grep "jbeats-darwin-arm64" checksums.txt | awk '{print $1}')
+          SHA_DARWIN_AMD64=$(grep "jbeats-darwin-amd64" checksums.txt | awk '{print $1}')
+          SHA_LINUX_ARM64=$(grep  "jbeats-linux-arm64"  checksums.txt | awk '{print $1}')
+          SHA_LINUX_AMD64=$(grep  "jbeats-linux-amd64"  checksums.txt | awk '{print $1}')
+
+          git clone https://x-access-token:${GH_TOKEN}@github.com/somak2kai/homebrew-tap.git tap
+          cd tap
+
+          sed -i "s|version \".*\"|version \"${VERSION_NUM}\"|" jbeats.rb
+          sed -i "s|JBEATS_SHA256_DARWIN_ARM64 = \".*\"|JBEATS_SHA256_DARWIN_ARM64 = \"${SHA_DARWIN_ARM64}\"|" jbeats.rb
+          sed -i "s|JBEATS_SHA256_DARWIN_AMD64 = \".*\"|JBEATS_SHA256_DARWIN_AMD64 = \"${SHA_DARWIN_AMD64}\"|" jbeats.rb
+          sed -i "s|JBEATS_SHA256_LINUX_ARM64  = \".*\"|JBEATS_SHA256_LINUX_ARM64  = \"${SHA_LINUX_ARM64}\"|"  jbeats.rb
+          sed -i "s|JBEATS_SHA256_LINUX_AMD64  = \".*\"|JBEATS_SHA256_LINUX_AMD64  = \"${SHA_LINUX_AMD64}\"|"  jbeats.rb
+
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add jbeats.rb
+          git commit -m "chore: bump jbeats to ${VERSION}"
+          git push
+
       - name: Update rolling release tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
