@@ -99,5 +99,3 @@ The path to the output file is printed to stdout on success. Errors go to stderr
 | 27 | `TK_WHILE` | `while` |
 | 28 | `TK_DO_WHILE` | `do … while` |
 | 29 | `TK_ASSERT` | `assert` |
-
-Token values mirror the `iota` constants in `beats/pkg/ast/parse.go` so that Go and Java outputs are directly comparable.
