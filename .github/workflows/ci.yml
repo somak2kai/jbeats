@@ -44,9 +44,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest       # linux/amd64
-          - os: ubuntu-24.04-arm    # linux/arm64
+          - os: ubuntu-24.04-arm
           - os: macos-latest        # darwin/arm64 (Apple Silicon)
-          - os: macos-13            # darwin/amd64 (Intel)
+          # - os: macos-13          # TODO: darwin/amd64 (Intel) — runner queue too slow, enable later
           - os: windows-latest      # windows/amd64
     runs-on: ${{ matrix.os }}
     steps:
