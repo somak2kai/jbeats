@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  # ── Run tests on the JVM first ───────────────────────────────────────
+  test:
+    name: Test (JVM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up GraalVM JDK 21
+        uses: graalvm/setup-graalvm@bef4b0e916c7dd079bf60fb95d49139f67e32c5f # v1.5.3
+        with:
+          java-version: "21"
+          distribution: "graalvm"
+
+      - name: Cache Maven packages
+        uses: actions/cache@d4323d4df104b026c6a166049fb557cb5d0bedfc # v4.2.0
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Run tests
+        run: mvn test
+
+  # ── Build native images (Linux + macOS) ──────────────────────────────
+  native:
+    name: Native image (${{ matrix.os }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up GraalVM JDK 21
+        uses: graalvm/setup-graalvm@bef4b0e916c7dd079bf60fb95d49139f67e32c5f # v1.5.3
+        with:
+          java-version: "21"
+          distribution: "graalvm"
+          native-image-job-reports: "true"
+
+      - name: Cache Maven packages
+        uses: actions/cache@d4323d4df104b026c6a166049fb557cb5d0bedfc # v4.2.0
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Build native image
+        run: mvn -Pnative package -DskipTests
+
+      - name: Smoke test
+        run: |
+          echo 'public class Smoke { public void hello() {} }' > /tmp/Smoke.java
+          ./target/jbeats --inp=/tmp/Smoke.java
+          echo "Exit code: $?"
+
+      - name: Upload native binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: jbeats-${{ runner.os }}-${{ runner.arch }}
+          path: target/jbeats
+          if-no-files-found: error

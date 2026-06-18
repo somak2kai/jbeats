@@ -1,0 +1,22 @@
+[
+  {
+    "name": "com.jbeats.Parser$ParamInfo",
+    "allDeclaredFields": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.jbeats.Parser$ReturnInfo",
+    "allDeclaredFields": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.jbeats.Parser$FunctionMeta",
+    "allDeclaredFields": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.jbeats.Parser$FileResult",
+    "allDeclaredFields": true,
+    "allDeclaredConstructors": true
+  }
+]
