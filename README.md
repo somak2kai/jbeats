@@ -1,6 +1,6 @@
 # jbeats
 
-Java port of [beats](../beats) — parses Java source files and emits per-method structural metadata as JSON. 
+Java port of [beats](https://github.com/somak2kai/beats) — parses Java source files and emits per-method structural metadata as JSON. 
 
 ## What it does
 

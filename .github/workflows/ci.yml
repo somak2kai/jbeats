@@ -29,14 +29,19 @@ jobs:
       - name: Run tests
         run: mvn test
 
-  # ── Build native images (Linux + macOS) ──────────────────────────────
+  # ── Build native images (Linux amd64/arm64, macOS arm64/amd64, Windows amd64) ──
   native:
     name: Native image (${{ matrix.os }})
     needs: test
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest       # linux/amd64
+          - os: ubuntu-24.04-arm    # linux/arm64
+          - os: macos-latest        # darwin/arm64 (Apple Silicon)
+          - os: macos-13            # darwin/amd64 (Intel)
+          - os: windows-latest      # windows/amd64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -58,15 +63,33 @@ jobs:
       - name: Build native image
         run: mvn -Pnative package -DskipTests
 
-      - name: Smoke test
+      - name: Smoke test (Unix)
+        if: runner.os != 'Windows'
         run: |
           echo 'public class Smoke { public void hello() {} }' > /tmp/Smoke.java
           ./target/jbeats --inp=/tmp/Smoke.java
           echo "Exit code: $?"
 
-      - name: Upload native binary
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-Content -Path "$env:TEMP\Smoke.java" -Value 'public class Smoke { public void hello() {} }'
+          .\target\jbeats.exe --inp="$env:TEMP\Smoke.java"
+          Write-Host "Exit code: $LASTEXITCODE"
+
+      - name: Upload native binary (Unix)
+        if: runner.os != 'Windows'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: jbeats-${{ runner.os }}-${{ runner.arch }}
           path: target/jbeats
+          if-no-files-found: error
+
+      - name: Upload native binary (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jbeats-${{ runner.os }}-${{ runner.arch }}
+          path: target/jbeats.exe
           if-no-files-found: error
