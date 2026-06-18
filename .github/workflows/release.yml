@@ -91,14 +91,13 @@ jobs:
           mv artifacts/jbeats-Linux-X64/jbeats       jbeats-linux-amd64
           mv artifacts/jbeats-Linux-ARM64/jbeats      jbeats-linux-arm64
           mv artifacts/jbeats-macOS-ARM64/jbeats      jbeats-darwin-arm64
-          mv artifacts/jbeats-macOS-X64/jbeats        jbeats-darwin-amd64
           mv artifacts/jbeats-Windows-X64/jbeats.exe  jbeats-windows-amd64.exe
-          chmod +x jbeats-linux-* jbeats-darwin-*
+          chmod +x jbeats-linux-amd64 jbeats-linux-arm64 jbeats-darwin-arm64
 
       - name: Compute sha256 checksums
         run: |
           sha256sum jbeats-linux-amd64 jbeats-linux-arm64 \
-                    jbeats-darwin-arm64 jbeats-darwin-amd64 \
+                    jbeats-darwin-arm64 \
                     jbeats-windows-amd64.exe > checksums.txt
 
       - name: Create versioned GitHub Release
@@ -112,7 +111,6 @@ jobs:
             jbeats-linux-amd64 \
             jbeats-linux-arm64 \
             jbeats-darwin-arm64 \
-            jbeats-darwin-amd64 \
             jbeats-windows-amd64.exe \
             checksums.txt
 
@@ -124,16 +122,14 @@ jobs:
           VERSION_NUM=${VERSION#v}
 
           SHA_DARWIN_ARM64=$(grep "jbeats-darwin-arm64" checksums.txt | awk '{print $1}')
-          SHA_DARWIN_AMD64=$(grep "jbeats-darwin-amd64" checksums.txt | awk '{print $1}')
-          SHA_LINUX_ARM64=$(grep  "jbeats-linux-arm64"  checksums.txt | awk '{print $1}')
           SHA_LINUX_AMD64=$(grep  "jbeats-linux-amd64"  checksums.txt | awk '{print $1}')
+          SHA_LINUX_ARM64=$(grep  "jbeats-linux-arm64"  checksums.txt | awk '{print $1}')
 
           git clone https://x-access-token:${GH_TOKEN}@github.com/somak2kai/homebrew-tap.git tap
           cd tap
 
           sed -i "s|version \".*\"|version \"${VERSION_NUM}\"|" jbeats.rb
           sed -i "s|JBEATS_SHA256_DARWIN_ARM64 = \".*\"|JBEATS_SHA256_DARWIN_ARM64 = \"${SHA_DARWIN_ARM64}\"|" jbeats.rb
-          sed -i "s|JBEATS_SHA256_DARWIN_AMD64 = \".*\"|JBEATS_SHA256_DARWIN_AMD64 = \"${SHA_DARWIN_AMD64}\"|" jbeats.rb
           sed -i "s|JBEATS_SHA256_LINUX_ARM64  = \".*\"|JBEATS_SHA256_LINUX_ARM64  = \"${SHA_LINUX_ARM64}\"|"  jbeats.rb
           sed -i "s|JBEATS_SHA256_LINUX_AMD64  = \".*\"|JBEATS_SHA256_LINUX_AMD64  = \"${SHA_LINUX_AMD64}\"|"  jbeats.rb
 
@@ -160,6 +156,5 @@ jobs:
             jbeats-linux-amd64 \
             jbeats-linux-arm64 \
             jbeats-darwin-arm64 \
-            jbeats-darwin-amd64 \
             jbeats-windows-amd64.exe \
             checksums.txt
