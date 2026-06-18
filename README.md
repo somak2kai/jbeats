@@ -1,5 +1,10 @@
 # jbeats
 
+[![CI](https://github.com/somak2kai/jbeats/actions/workflows/ci.yml/badge.svg)](https://github.com/somak2kai/jbeats/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/somak2kai/jbeats/branch/main/graph/badge.svg)](https://codecov.io/gh/somak2kai/jbeats)
+[![Java](https://img.shields.io/badge/Java-17-blue?logo=openjdk)](https://openjdk.org/projects/jdk/17/)
+[![GraalVM](https://img.shields.io/badge/GraalVM-21-orange)](https://www.graalvm.org/)
+
 Java port of [beats](https://github.com/somak2kai/beats) — parses Java source files and emits per-method structural metadata as JSON. 
 
 ## What it does

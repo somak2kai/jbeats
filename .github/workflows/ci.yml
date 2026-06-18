@@ -29,6 +29,12 @@ jobs:
       - name: Run tests
         run: mvn test
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@04b047e8bb82a0c002c8312c1c880fbc6a999d45
+        with:
+          files: target/site/jacoco/jacoco.xml
+          fail_ci_if_error: false
+
   # ── Build native images (Linux amd64/arm64, macOS arm64/amd64, Windows amd64) ──
   native:
     name: Native image (${{ matrix.os }})
