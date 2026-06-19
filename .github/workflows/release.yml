@@ -40,7 +40,7 @@ jobs:
           restore-keys: ${{ runner.os }}-maven-
 
       - name: Build native image
-        run: mvn -Pnative package -DskipTests -Djbeats.version=${{ github.ref_name }}
+        run: mvn -Pnative package -DskipTests "-Djbeats.version=${{ github.ref_name }}"
 
       - name: Smoke test (Unix)
         if: runner.os != 'Windows'
