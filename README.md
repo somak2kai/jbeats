@@ -75,32 +75,3 @@ The path to the output file is printed to stdout on success. Errors go to stderr
   ]
 }
 ```
-
-## Token reference
-
-| Value | Constant | Construct |
-|-------|----------|-----------|
-| 0 | `TK_IF` | `if` |
-| 1 | `TK_FOR` | `for` (C-style) |
-| 2 | `TK_RANGE` | `for` (enhanced / for-each) |
-| 3 | `TK_SWITCH` | `switch` |
-| 4 | `TK_CASE` | `case` label |
-| 7 | `TK_RETURN` | `return` |
-| 11 | `TK_CONTINUE` | `continue` |
-| 12 | `TK_BREAK` | `break` |
-| 14 | `TK_CALL` | local / `this.method()` call |
-| 15 | `TK_FUNCLIT` | lambda expression |
-| 16 | `TK_ASSIGN` | assignment or variable declaration |
-| 17 | `TK_CALL_PKG` | static call on imported class |
-| 18 | `TK_CALL_METHOD` | instance method call |
-| 19 | `TK_COMPOSITE_LIT` | `new Foo()` / `new T[]{}` |
-| 20 | `TK_BINARY_OP` | binary operator |
-| 21 | `TK_TYPE_ASSERT` | `instanceof` / cast |
-| 22 | `TK_TRY` | `try` |
-| 23 | `TK_CATCH` | `catch` |
-| 24 | `TK_THROW` | `throw` |
-| 25 | `TK_FINALLY` | `finally` |
-| 26 | `TK_SYNCHRONIZED` | `synchronized` |
-| 27 | `TK_WHILE` | `while` |
-| 28 | `TK_DO_WHILE` | `do … while` |
-| 29 | `TK_ASSERT` | `assert` |
