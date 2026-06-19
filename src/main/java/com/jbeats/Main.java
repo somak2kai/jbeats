@@ -31,8 +31,7 @@ public class Main {
                 printUsage();
                 return;
             } else if (arg.equals("--version")) {
-                String version = System.getProperty("jbeats.version", "dev");
-                System.out.println("jbeats " + version);
+                System.out.println("jbeats " + Version.VALUE);
                 return;
             }
             // Silently ignore JVM flags like -Xms4g, -Xmx, etc.

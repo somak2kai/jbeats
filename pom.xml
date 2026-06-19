@@ -109,6 +109,7 @@
                                 <arg>--gc=serial</arg>
                                 <arg>-H:+ReportExceptionStackTraces</arg>
                                 <arg>-Djbeats.version=${jbeats.version}</arg>
+                                <arg>--initialize-at-build-time=com.jbeats.Version</arg>
                             </buildArgs>
                         </configuration>
                         <executions>
