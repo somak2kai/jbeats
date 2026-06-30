@@ -116,17 +116,13 @@ public class Main {
         return null;
     }
 
-    /**
-     * Builds: $TMPDIR/beats/<repo>/<relative-path-without-.java>-beats.json
-     */
     private static Path buildOutputPath(String repoName, String relativePath) {
         String tmpDir = System.getProperty("java.io.tmpdir");
-        // Strip .java extension, add -beats.json
-        String baseName = relativePath;
+        String baseName = Paths.get(relativePath).getFileName().toString();
         if (baseName.endsWith(".java")) {
             baseName = baseName.substring(0, baseName.length() - ".java".length());
         }
-        String outputFile = baseName + "-beats.json";
+        String outputFile = java.util.UUID.randomUUID() + "-" + baseName + "-beats.json";
         return Paths.get(tmpDir, "beats", repoName, outputFile);
     }
 

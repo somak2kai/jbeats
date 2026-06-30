@@ -15,7 +15,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <mainClass>com.jbeats.Main</mainClass>
         <jbeats.version>dev</jbeats.version>
-        <javaparser.version>3.25.10</javaparser.version>
+        <javaparser.version>3.28.2</javaparser.version>
         <gson.version>2.11.0</gson.version>
         <graalvm.version>0.10.4</graalvm.version>
         <junit.version>5.10.2</junit.version>
