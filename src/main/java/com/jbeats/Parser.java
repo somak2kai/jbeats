@@ -12,6 +12,7 @@ import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.*;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.Modifier;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -166,7 +167,7 @@ public class Parser {
         cu.findAll(MethodDeclaration.class).forEach(md -> {
             FunctionMeta fm = processMethod(md, packageName, filePath.getFileName().toString(), filePathStr, aliasMap);
             if (fm != null) {
-                fm.generated_code = isGenerated;
+                fm.generated_code = isGenerated || isScaffolding(md);
                 fm.test_code = isTest;
                 functions.add(fm);
             }
@@ -261,7 +262,8 @@ public class Parser {
         }
 
         fm.token_seq = tokens;
-        fm.call_targets = extractCallTargets(md.getBody().get(), aliasMap);
+        Map<String, String> typeEnv = localTypeEnv(md);
+        fm.call_targets = extractCallTargets(md.getBody().get(), aliasMap, typeEnv);
         fm.direct_imports = extractDirectImports(md.getBody().get(), aliasMap);
         fm.is_constructor = false;
         fm.body = md.toString();
@@ -298,7 +300,8 @@ public class Parser {
         walkBody(cd.getBody(), tokens, complexity, aliasMap);
 
         fm.token_seq = tokens;
-        fm.call_targets = extractCallTargets(cd.getBody(), aliasMap);
+        Map<String, String> typeEnv = localTypeEnv(cd);
+        fm.call_targets = extractCallTargets(cd.getBody(), aliasMap, typeEnv);
         fm.direct_imports = extractDirectImports(cd.getBody(), aliasMap);
         fm.is_constructor = isTrivialConstructor(cd);
         fm.body = cd.toString();
@@ -464,40 +467,114 @@ public class Parser {
         return TK_CALL_METHOD;
     }
 
-    private static List<String> extractCallTargets(Node body, Map<String, String> aliasMap) {
+    private static List<String> extractCallTargets(Node body, Map<String, String> aliasMap,
+            Map<String, String> typeEnv) {
         Set<String> seen = new LinkedHashSet<>();
         body.walk(Node.TreeTraversal.PREORDER, node -> {
-            if (!(node instanceof MethodCallExpr))
-                return;
-            MethodCallExpr call = (MethodCallExpr) node;
-            if (!call.getScope().isPresent())
-                return;
-
-            Expression scope = call.getScope().get();
-            if (!(scope instanceof NameExpr))
-                return;
-
-            String name = ((NameExpr) scope).getNameAsString();
-            String importPath = aliasMap.get(name);
-            if (importPath != null) {
-                seen.add(importPath + "." + call.getNameAsString());
+            if (node instanceof MethodCallExpr) {
+                MethodCallExpr call = (MethodCallExpr) node;
+                if (!call.getScope().isPresent())
+                    return;
+                Expression scope = call.getScope().get();
+                if (!(scope instanceof NameExpr))
+                    return; // chained / this / super calls need a symbol solver — skipped
+                String name = ((NameExpr) scope).getNameAsString();
+                String importPath = resolveType(name, aliasMap, typeEnv);
+                if (importPath != null) {
+                    seen.add(importPath + "." + call.getNameAsString());
+                }
+            } else if (node instanceof ObjectCreationExpr) {
+                ObjectCreationExpr create = (ObjectCreationExpr) node;
+                // Skip anonymous class instantiations (`new Action<>() { ... }`): they
+                // implement an interface / extend a base type rather than calling a real
+                // constructor, so `Interface.<init>` would be noise. The type is still
+                // recorded as a direct import, and calls inside the body are still walked.
+                if (create.getAnonymousClassBody().isPresent())
+                    return;
+                String importPath = aliasMap.get(create.getType().getNameAsString());
+                if (importPath != null) {
+                    seen.add(importPath + ".<init>");
+                }
             }
         });
         return new ArrayList<>(seen);
     }
 
+    /**
+     * Maps a receiver identifier to an import path: directly if it is itself an
+     * imported
+     * class (static call), otherwise via its declared type in the local
+     * environment.
+     */
+    private static String resolveType(String name, Map<String, String> aliasMap,
+            Map<String, String> typeEnv) {
+        String direct = aliasMap.get(name);
+        if (direct != null)
+            return direct; // static call on imported class
+        String declared = typeEnv.get(name);
+        if (declared == null)
+            return null;
+        if (declared.indexOf('.') >= 0)
+            return declared; // type was written fully-qualified in source
+        return aliasMap.get(declared); // simple type name -> import path
+    }
+
+    /**
+     * Imports referenced in the body. Captures bare name references (static fields,
+     * enum
+     * constants, static-call scopes) AND type references — local-variable types,
+     * cast /
+     * generic / instanceof types, and constructor types ({@code new Foo()}) —
+     * matched
+     * through the import alias map.
+     */
     private static List<String> extractDirectImports(Node body, Map<String, String> aliasMap) {
         Set<String> seen = new LinkedHashSet<>();
         body.walk(Node.TreeTraversal.PREORDER, node -> {
-            if (!(node instanceof NameExpr))
-                return;
-            String name = ((NameExpr) node).getNameAsString();
-            String importPath = aliasMap.get(name);
-            if (importPath != null) {
-                seen.add(importPath);
+            if (node instanceof NameExpr) {
+                String importPath = aliasMap.get(((NameExpr) node).getNameAsString());
+                if (importPath != null)
+                    seen.add(importPath);
+            } else if (node instanceof ClassOrInterfaceType) {
+                String importPath = aliasMap.get(((ClassOrInterfaceType) node).getNameAsString());
+                if (importPath != null)
+                    seen.add(importPath);
             }
         });
         return new ArrayList<>(seen);
+    }
+
+    /**
+     * Builds a same-file identifier &rarr; declared-type map for one
+     * method/constructor, from
+     * parameters, local variable declarations, and enclosing-class fields. Pure
+     * AST: no
+     * symbol solver, no classpath, so it is safe under GraalVM native-image.
+     */
+    private static Map<String, String> localTypeEnv(Node decl) {
+        Map<String, String> env = new HashMap<>();
+        decl.findAll(Parameter.class).forEach(p -> env.put(p.getNameAsString(), baseType(p.getTypeAsString())));
+        decl.findAll(VariableDeclarationExpr.class)
+                .forEach(v -> v.getVariables()
+                        .forEach(d -> env.put(d.getNameAsString(), baseType(d.getTypeAsString()))));
+        decl.findAncestor(TypeDeclaration.class).map(td -> (TypeDeclaration<?>) td).ifPresent(td -> td.getFields()
+                .forEach(f -> f.getVariables()
+                        .forEach(d -> env.put(d.getNameAsString(), baseType(d.getTypeAsString())))));
+        return env;
+    }
+
+    /**
+     * Strips generics and array brackets: "List&lt;String&gt;" -&gt; "List",
+     * "byte[]" -&gt; "byte".
+     */
+    private static String baseType(String type) {
+        int lt = type.indexOf('<');
+        if (lt >= 0)
+            type = type.substring(0, lt);
+        int br = type.indexOf('[');
+        if (br >= 0)
+            type = type.substring(0, br);
+        return type.trim();
     }
 
     private static boolean isTestFile(List<String> imports) {
@@ -556,5 +633,76 @@ public class Parser {
             return false;
         }
         return true;
+    }
+
+    /**
+     * True for boilerplate scaffolding that carries no structural signal worth
+     * clustering. eg get/set/equals/hashcode.
+     */
+    private static boolean isScaffolding(MethodDeclaration md) {
+        String name = md.getNameAsString();
+        int paramCount = md.getParameters().size();
+        String ret = md.getTypeAsString();
+
+        // equals(Object): boolean
+        if (name.equals("equals") && paramCount == 1 && ret.equals("boolean")) {
+            return true;
+        }
+        // hashCode(): int
+        if (name.equals("hashCode") && paramCount == 0 && ret.equals("int")) {
+            return true;
+        }
+        // trivial getter: getX()/isX()/hasX(), no params, non-void, body = return field
+        if (paramCount == 0 && !ret.equals("void") && isGetterName(name) && isTrivialAccessorBody(md, true)) {
+            return true;
+        }
+        // trivial setter: setX(v): void, body = field assignment
+        if (paramCount == 1 && ret.equals("void") && isSetterName(name) && isTrivialAccessorBody(md, false)) {
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean isGetterName(String name) {
+        return prefixed(name, "get", 3) || prefixed(name, "is", 2) || prefixed(name, "has", 3);
+    }
+
+    private static boolean isSetterName(String name) {
+        return prefixed(name, "set", 3);
+    }
+
+    // prefixed reports whether name starts with prefix followed by an upper-case
+    // letter (e.g. "getName", not the bare word "get" or "gettable").
+    private static boolean prefixed(String name, String prefix, int len) {
+        return name.length() > len && name.startsWith(prefix) && Character.isUpperCase(name.charAt(len));
+    }
+
+    // isTrivialAccessorBody: a single-statement body that is either a field return
+    // (getter=true) or a field assignment (getter=false, i.e. a setter).
+    private static boolean isTrivialAccessorBody(MethodDeclaration md, boolean getter) {
+        if (!md.getBody().isPresent()) {
+            return false;
+        }
+        List<Statement> stmts = md.getBody().get().getStatements();
+        if (stmts.size() != 1) {
+            return false;
+        }
+        Statement s = stmts.get(0);
+        if (getter) {
+            if (!(s instanceof ReturnStmt)) {
+                return false;
+            }
+            Optional<Expression> e = ((ReturnStmt) s).getExpression();
+            return e.isPresent() && (e.get() instanceof NameExpr || e.get() instanceof FieldAccessExpr);
+        }
+        if (!(s instanceof ExpressionStmt)) {
+            return false;
+        }
+        Expression e = ((ExpressionStmt) s).getExpression();
+        if (!(e instanceof AssignExpr)) {
+            return false;
+        }
+        Expression target = ((AssignExpr) e).getTarget();
+        return target instanceof NameExpr || target instanceof FieldAccessExpr;
     }
 }
