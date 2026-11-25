@@ -36,11 +36,10 @@ mvn test
 ## Usage
 
 ```sh
-./target/jbeats --inp=/path/to/MyClass.java --repo=myrepo
-
+./target/jbeats --repo=/path/to/repo --inp=src/main/java/A.java --inp=src/main/java/B.java
 ```
 
-The path to the output file is printed to stdout on success. Errors go to stderr.
+`--inp` paths are relative to `--repo` (default: current directory) and may be repeated. After all files are processed, one line per `--inp` is printed to stdout in the same order: the output JSON path, or an empty line if that file failed. Errors go to stderr; the exit code is 1 if any file failed.
 
 ## Output format
 

@@ -3,10 +3,12 @@ package com.jbeats;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * CLI entry point for jbeats.
@@ -19,120 +21,84 @@ import java.nio.file.Paths;
 public class Main {
 
     public static void main(String[] args) {
-        String inputPath = null;
-        String repoOverride = null;
+        System.exit(run(args, System.out, System.err));
+    }
+
+    static int run(String[] args, PrintStream out, PrintStream err) {
+        List<String> inputs = new ArrayList<>();
+        String repo = null;
 
         for (String arg : args) {
             if (arg.startsWith("--inp=")) {
-                inputPath = arg.substring("--inp=".length());
+                inputs.add(arg.substring("--inp=".length()));
             } else if (arg.startsWith("--repo=")) {
-                repoOverride = arg.substring("--repo=".length());
+                repo = arg.substring("--repo=".length());
             } else if (arg.equals("--help") || arg.equals("-h")) {
-                printUsage();
-                return;
+                printUsage(err);
+                return 0;
             } else if (arg.equals("--version")) {
-                System.out.println("jbeats " + Version.VALUE);
-                return;
+                out.println("jbeats " + Version.VALUE);
+                return 0;
             }
             // Silently ignore JVM flags like -Xms4g, -Xmx, etc.
             // GraalVM native-image handles these at the VM level.
         }
 
-        if (inputPath == null) {
-            System.err.println("error: --inp=<file.java> is required");
-            printUsage();
-            System.exit(1);
+        if (inputs.isEmpty()) {
+            err.println("error: --inp=<file.java> is required");
+            printUsage(err);
+            return 1;
         }
 
-        Path filePath = Paths.get(inputPath).toAbsolutePath().normalize();
+        Path repoDir = Paths.get(repo != null ? repo : "").toAbsolutePath().normalize();
+        Path repoName = repoDir.getFileName();
+        String repoNameStr = repoName != null ? repoName.toString() : "root";
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
+        List<String> results = new ArrayList<>(inputs.size());
+        boolean anyFailed = false;
+        for (String inp : inputs) {
+            try {
+                results.add(processFile(repoDir.resolve(inp).normalize(), repoNameStr, gson).toString());
+            } catch (Exception e) {
+                err.println("error: " + inp + ": " + e.getMessage());
+                results.add("");
+                anyFailed = true;
+            }
+        }
+
+        results.forEach(out::println);
+        return anyFailed ? 1 : 0;
+    }
+
+    private static Path processFile(Path filePath, String repoName, Gson gson) throws Exception {
         if (!Files.exists(filePath)) {
-            System.err.println("error: file not found: " + filePath);
-            System.exit(1);
+            throw new IllegalArgumentException("file not found: " + filePath);
         }
         if (!filePath.toString().endsWith(".java")) {
-            System.err.println("error: not a .java file: " + filePath);
-            System.exit(1);
+            throw new IllegalArgumentException("not a .java file: " + filePath);
         }
-
-        // Determine repo name and relative path
-        String repoName;
-        String relativePath;
-        if (repoOverride != null) {
-            repoName = repoOverride;
-            relativePath = filePath.getFileName().toString();
-        } else {
-            Path gitRoot = findGitRoot(filePath.getParent());
-            if (gitRoot != null) {
-                repoName = gitRoot.getFileName().toString();
-                relativePath = gitRoot.relativize(filePath).toString();
-            } else {
-                // No git root found — use parent directory name
-                repoName = filePath.getParent().getFileName().toString();
-                relativePath = filePath.getFileName().toString();
-            }
-        }
-
-        // Parse the file
-        Parser.FileResult result;
-        try {
-            result = Parser.parseFile(filePath);
-        } catch (Exception e) {
-            System.err.println("error: failed to parse " + filePath + ": " + e.getMessage());
-            System.exit(1);
-            return;
-        }
-
-        // Fix file path in result to be relative
-        // result.file = relativePath;
-
-        // Build output path: $TMPDIR/beats/<repo>/<relative-dir>/File-beats.json
-        Path outputPath = buildOutputPath(repoName, relativePath);
-
-        // Write JSON
-        try {
-            Files.createDirectories(outputPath.getParent());
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            String json = gson.toJson(result);
-            Files.writeString(outputPath, json);
-            System.out.println(outputPath);
-        } catch (IOException e) {
-            System.err.println("error: failed to write output: " + e.getMessage());
-            System.exit(1);
-        }
+        Parser.FileResult result = Parser.parseFile(filePath);
+        Path outputPath = buildOutputPath(repoName, filePath.getFileName().toString());
+        Files.createDirectories(outputPath.getParent());
+        Files.writeString(outputPath, gson.toJson(result));
+        return outputPath;
     }
 
-    /**
-     * Walks up from dir looking for a .git directory.
-     * Returns the directory containing .git, or null.
-     */
-    private static Path findGitRoot(Path dir) {
-        Path current = dir;
-        while (current != null) {
-            if (Files.isDirectory(current.resolve(".git"))) {
-                return current;
-            }
-            current = current.getParent();
-        }
-        return null;
-    }
-
-    private static Path buildOutputPath(String repoName, String relativePath) {
+    private static Path buildOutputPath(String repoName, String fileName) {
         String tmpDir = System.getProperty("java.io.tmpdir");
-        String baseName = Paths.get(relativePath).getFileName().toString();
-        if (baseName.endsWith(".java")) {
-            baseName = baseName.substring(0, baseName.length() - ".java".length());
-        }
+        String baseName = fileName.substring(0, fileName.length() - ".java".length());
         String outputFile = java.util.UUID.randomUUID() + "-" + baseName + "-beats.json";
         return Paths.get(tmpDir, "beats", repoName, outputFile);
     }
 
-    private static void printUsage() {
-        System.err.println("Usage: jbeats --inp=<file.java> [--repo=<name>]");
-        System.err.println();
-        System.err.println("Options:");
-        System.err.println("  --inp=<path>   Path to a .java file (required)");
-        System.err.println("  --repo=<name>  Override repo name (default: auto-detect from .git)");
-        System.err.println("  --version      Print version");
-        System.err.println("  --help         Print this help");
+    private static void printUsage(PrintStream err) {
+        err.println("Usage: jbeats --repo=<dir> --inp=<file.java> [--inp=<file.java> ...]");
+        err.println();
+        err.println("Options:");
+        err.println("  --inp=<path>   .java file relative to --repo (repeatable, required)");
+        err.println("  --repo=<dir>   Repo root that --inp paths are relative to (default: cwd)");
+        err.println("  --version      Print version");
+        err.println("  --help         Print this help");
     }
 }
